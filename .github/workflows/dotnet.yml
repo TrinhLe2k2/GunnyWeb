@@ -38,6 +38,9 @@ jobs:
         with:
           name: publish  # Đảm bảo rằng tên artifact khớp
           path: ./publish
+      - name: Verify artifact upload
+        run: |
+          dir .\publish
 
   deploy:
     runs-on: windows-latest
