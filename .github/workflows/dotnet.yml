@@ -31,44 +31,71 @@ jobs:
         run: dotnet test --no-build --verbosity normal
 
       - name: Publish the application
-        run: dotnet publish --configuration Release --output ./publish
+        run: dotnet publish ./GunnyWeb/GunnyWeb.csproj --configuration Release --output ./publish
 
       - name: Upload published application as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: publish  # Đảm bảo rằng tên artifact khớp
+          name: publish
           path: ./publish
+
       - name: Verify artifact upload
         run: |
-          dir .\publish
+          if (Test-Path ./publish) { dir .\publish } else { Write-Error "Publish folder not found"; exit 1 }
 
   deploy:
+    needs: build
     runs-on: windows-latest
 
     steps:
       - name: Download published application
         uses: actions/download-artifact@v4
         with:
-          name: publish  # Đảm bảo tên artifact khớp
+          name: publish
           path: ./publish
 
       - name: Deploy to IIS on VM
+        env:
+          DEPLOY_SERVER: ${{ secrets.DEPLOY_SERVER }}
+          DEPLOY_USERNAME: ${{ secrets.DEPLOY_USERNAME }}
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+          DESTINATION_PATH: 'C:\inetpub\wwwroot\GunnyWeb'
         run: |
-          $server = '192.168.1.53'
-          $username = 'Administrator'
-          $password = 'Trinh2002'
-          $destinationPath = 'C:\inetpub\wwwroot\GunnyWeb'
+          $server = $env:DEPLOY_SERVER
+          $username = $env:DEPLOY_USERNAME
+          $password = $env:DEPLOY_PASSWORD
+          $destinationPath = $env:DESTINATION_PATH
+
+          if (-not $server -or -not $username -or -not $password) {
+              Write-Error "Deployment secrets are not set. Configure DEPLOY_SERVER, DEPLOY_USERNAME, DEPLOY_PASSWORD in repository secrets."
+              exit 1
+          }
+
+          $publishFolder = Join-Path $PWD 'publish'
+          if (-not (Test-Path $publishFolder)) {
+              Write-Error "Publish folder not found: $publishFolder"
+              exit 1
+          }
 
           $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
           $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
 
-          Invoke-Command -ComputerName $server -Credential $credential -ScriptBlock {
-              Copy-Item -Path './publish/*' -Destination $destinationPath -Recurse
-          }
+          Write-Host "Creating PSSession to $server..."
+          $session = New-PSSession -ComputerName $server -Credential $credential -ErrorAction Stop
 
-          Invoke-Command -ComputerName $server -Credential $credential -ScriptBlock {
-              iisreset
+          try {
+              Write-Host "Copying files to $server:$destinationPath..."
+              Copy-Item -Path (Join-Path $publishFolder '*') -Destination $destinationPath -ToSession $session -Recurse -Force -ErrorAction Stop
+
+              Write-Host "Restarting IIS on remote host..."
+              Invoke-Command -Session $session -ScriptBlock { iisreset }
+
+              Write-Host "Deployment finished successfully."
+          }
+          finally {
+              if ($session) { Remove-PSSession $session }
           }
 
       - name: Notify success
+        if: success()
         run: echo "Deployment to IIS was successful."
