@@ -84,7 +84,7 @@ jobs:
           $session = New-PSSession -ComputerName $server -Credential $credential -ErrorAction Stop
 
           try {
-              Write-Host "Copying files to $server:$destinationPath..."
+              Write-Host "Copying files to ${server}:$destinationPath..."
               Copy-Item -Path (Join-Path $publishFolder '*') -Destination $destinationPath -ToSession $session -Recurse -Force -ErrorAction Stop
 
               Write-Host "Restarting IIS on remote host..."
