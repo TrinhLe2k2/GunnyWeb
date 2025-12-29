@@ -1,0 +1,75 @@
+﻿name: Deploy GunnyWeb to IIS  # Tên của workflow (quy trình CI/CD), bạn có thể thay đổi tùy ý.
+
+# Trigger để GitHub Actions bắt đầu chạy khi có các sự kiện sau:
+on:
+  push:
+    branches:
+      - master   # Khi có thay đổi push lên nhánh 'master' (ví dụ: bạn commit mã nguồn vào nhánh master)
+  pull_request:
+    branches:
+      - master   # Khi có pull request vào nhánh 'master'
+
+jobs:  # Định nghĩa các công việc (jobs) mà workflow sẽ thực hiện
+  build:
+    runs-on: windows-latest  # Chạy job trên môi trường Windows của GitHub Actions
+
+    steps:
+      # Bước 1: Checkout mã nguồn từ GitHub repository
+      - name: Checkout code
+        uses: actions/checkout@v2  # Sử dụng action của GitHub để lấy mã nguồn từ repository
+
+      # Bước 2: Cài đặt .NET Core SDK, yêu cầu để biên dịch và chạy ứng dụng .NET
+      - name: Setup .NET Core SDK
+        uses: actions/setup-dotnet@v2  # Sử dụng action của GitHub để cài đặt .NET SDK
+        with:
+          dotnet-version: '8.0.x'  # Cài đặt phiên bản .NET Core 8.x (thay đổi nếu bạn dùng phiên bản khác)
+
+      # Bước 3: Phục hồi các dependency (gói) của dự án .NET
+      - name: Restore dependencies
+        run: dotnet restore  # Thực hiện lệnh 'dotnet restore' để tải các gói cần thiết từ NuGet
+
+      # Bước 4: Biên dịch (build) ứng dụng .NET
+      - name: Build the application
+        run: dotnet build --configuration Release  # Thực hiện lệnh 'dotnet build' để biên dịch ứng dụng với cấu hình Release
+
+      # Bước 5: Xuất bản (publish) ứng dụng .NET Core để sẵn sàng cho việc deploy
+      - name: Publish the application
+        run: dotnet publish --configuration Release --output ./publish  # Thực hiện lệnh 'dotnet publish' và lưu đầu ra vào thư mục './publish'
+
+  # Bước 6: Deploy (triển khai) ứng dụng lên IIS trên VM
+  deploy:
+    runs-on: windows-latest  # Chạy job deploy trên môi trường Windows
+
+    steps:
+      # Bước 1: Tải các file đã được publish từ job build trước đó
+      - name: Download published application
+        uses: actions/download-artifact@v2  # Tải artifact (tệp đã được xuất bản) từ job build
+        with:
+          name: publish  # Tên của artifact cần tải
+
+      # Bước 2: Triển khai ứng dụng lên IIS trên VM
+      - name: Deploy to IIS on VM
+        run: |
+          # Lấy các thông tin từ Secrets của GitHub để bảo mật (ví dụ: địa chỉ IP của VM, username, password)
+          $server = '${{ secrets.VM_IP_ADDRESS }}'    # Địa chỉ IP của VM
+          $username = '${{ secrets.VM_USERNAME }}'    # Tên người dùng đăng nhập vào VM
+          $password = '${{ secrets.VM_PASSWORD }}'    # Mật khẩu đăng nhập vào VM
+          $destinationPath = 'C:\inetpub\wwwroot\GunnyWeb'  # Đường dẫn thư mục trên IIS để chứa ứng dụng
+
+          # Chuyển mật khẩu thành dạng an toàn (SecureString) cho PowerShell
+          $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
+          $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
+
+          # Sao chép file từ thư mục publish vào thư mục IIS trên VM
+          Invoke-Command -ComputerName $server -Credential $credential -ScriptBlock {
+              Copy-Item -Path './publish/*' -Destination $destinationPath -Recurse
+          }
+
+          # Khởi động lại IIS để áp dụng các thay đổi (reload website)
+          Invoke-Command -ComputerName $server -Credential $credential -ScriptBlock {
+              iisreset  # Lệnh để khởi động lại IIS (tái khởi động ứng dụng web)
+          }
+
+      # Bước 3: In thông báo thành công sau khi deploy xong
+      - name: Notify success
+        run: echo "Deployment to IIS was successful."  # In thông báo khi deployment thành công
