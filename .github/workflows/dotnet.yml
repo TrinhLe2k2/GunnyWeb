@@ -39,6 +39,12 @@ jobs:  # Định nghĩa các công việc (jobs) mà workflow sẽ thực hiện
       - name: Publish the application
         run: dotnet publish --configuration Release --output ./publish  # Thực hiện lệnh 'dotnet publish' và lưu đầu ra vào thư mục './publish'
 
+      - name: Upload published application as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish  # Tên artifact để tải lên
+          path: ./publish  # Đường dẫn đến thư mục chứa các file đã publish
+
   # Bước 6: Deploy (triển khai) ứng dụng lên IIS trên VM
   deploy:
     runs-on: windows-latest  # Chạy job deploy trên môi trường Windows
@@ -46,7 +52,7 @@ jobs:  # Định nghĩa các công việc (jobs) mà workflow sẽ thực hiện
     steps:
       # Bước 1: Tải các file đã được publish từ job build trước đó
       - name: Download published application
-        uses: actions/download-artifact@v4  # Tải artifact (tệp đã được xuất bản) từ job build
+        uses: actions/download-artifact@v3  # Tải artifact (tệp đã được xuất bản) từ job build
         with:
           name: publish  # Tên của artifact cần tải
 
