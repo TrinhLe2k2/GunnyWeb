@@ -52,9 +52,9 @@ jobs:  # Định nghĩa các công việc (jobs) mà workflow sẽ thực hiện
       - name: Deploy to IIS on VM
         run: |
           # Lấy các thông tin từ Secrets của GitHub để bảo mật (ví dụ: địa chỉ IP của VM, username, password)
-          $server = '${{ secrets.VM_IP_ADDRESS }}'    # Địa chỉ IP của VM
-          $username = '${{ secrets.VM_USERNAME }}'    # Tên người dùng đăng nhập vào VM
-          $password = '${{ secrets.VM_PASSWORD }}'    # Mật khẩu đăng nhập vào VM
+          $server = '192.168.1.53'    # Địa chỉ IP của VM
+          $username = 'administrator'    # Tên người dùng đăng nhập vào VM
+          $password = 'Trinh2002'    # Mật khẩu đăng nhập vào VM
           $destinationPath = 'C:\inetpub\wwwroot\GunnyWeb'  # Đường dẫn thư mục trên IIS để chứa ứng dụng
 
           # Chuyển mật khẩu thành dạng an toàn (SecureString) cho PowerShell
