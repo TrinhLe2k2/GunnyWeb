@@ -46,7 +46,7 @@ jobs:  # Định nghĩa các công việc (jobs) mà workflow sẽ thực hiện
     steps:
       # Bước 1: Tải các file đã được publish từ job build trước đó
       - name: Download published application
-        uses: actions/download-artifact@v3  # Tải artifact (tệp đã được xuất bản) từ job build
+        uses: actions/download-artifact@v4  # Tải artifact (tệp đã được xuất bản) từ job build
         with:
           name: publish  # Tên của artifact cần tải
 
