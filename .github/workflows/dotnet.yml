@@ -54,6 +54,10 @@ jobs:
           Set-Item wsman:\localhost\client\trustedhosts -Value "*" -Force  # Cho phép kết nối từ tất cả các máy
 
       - name: Test WinRM Connection
+        env:
+          DEPLOY_SERVER: '192.168.0.186'
+          DEPLOY_USERNAME: 'Administrator'
+          DEPLOY_PASSWORD: 'Trinh2002'
         run: |
           $server = $env:DEPLOY_SERVER
           $username = $env:DEPLOY_USERNAME
