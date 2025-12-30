@@ -1,3 +1,4 @@
+
 name: Deploy GunnyWeb to IIS
 
 on:
@@ -48,6 +49,23 @@ jobs:
     runs-on: windows-latest
 
     steps:
+      - name: Configure TrustedHosts for WinRM
+        run: |
+          Set-Item wsman:\localhost\client\trustedhosts -Value "*" -Force  # Cho phép kết nối từ tất cả các máy
+
+      - name: Test WinRM Connection
+        run: |
+          $server = $env:DEPLOY_SERVER
+          $username = $env:DEPLOY_USERNAME
+          $password = $env:DEPLOY_PASSWORD
+
+          $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
+          $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
+
+          $session = New-PSSession -ComputerName $server -Credential $credential -ErrorAction Stop
+          Write-Host "Successfully connected to $server via WinRM"
+          Remove-PSSession $session
+
       - name: Download published application
         uses: actions/download-artifact@v4
         with:
