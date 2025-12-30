@@ -10,9 +10,19 @@ on:
 jobs:
   test_connect:
     runs-on: self-hosted
+    timeout-minutes: 2   # tránh treo runner
+
     steps:
-      
-      - name: Test WinRM port 5985 (HTTP) connection
+      - name: Ping target
+        run: ping -n 4 192.168.1.91
+
+      - name: Check WinRM port
+        shell: powershell
+        run: |
+          Test-NetConnection -ComputerName 192.168.1.91 -Port 5985
+
+      - name: Test WinRM connection
+        shell: powershell
         run: |
           $server = '192.168.1.91'
           $username = 'Administrator'
@@ -21,11 +31,14 @@ jobs:
           $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
           $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
 
+          $option = New-PSSessionOption -OpenTimeout 5000 -OperationTimeout 5000
+
           try {
-            $session = New-PSSession -ComputerName $server -Credential $credential -ErrorAction Stop
-            Write-Host "Successfully connected to $server via WinRM"
+            $session = New-PSSession -ComputerName $server -Credential $credential -SessionOption $option -ErrorAction Stop
+            Write-Host "✅ WinRM connected successfully"
             Remove-PSSession $session
-          } catch {
-            Write-Error "Failed to connect to $server via WinRM"
+          }
+          catch {
+            Write-Error "❌ WinRM connection failed"
             exit 1
           }
