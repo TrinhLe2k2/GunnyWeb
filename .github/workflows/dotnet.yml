@@ -1,5 +1,4 @@
-
-name: Deploy GunnyWeb to IIS
+name: Test WinRM Connection
 
 on:
   push:
@@ -8,57 +7,17 @@ on:
   pull_request:
     branches:
       - master
-
 jobs:
-  build:
+  test_connect:
     runs-on: self-hosted
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # - name: Setup .NET Core SDK
-      #   uses: actions/setup-dotnet@v4
-      #   with:
-      #     dotnet-version: '8.0.x'
-      #     install-dir: 'C:\dotnet'
-
-      - name: Restore dependencies
-        run: dotnet restore ./GunnyWeb/GunnyWeb.csproj
-
-      - name: Build the application
-        run: dotnet build ./GunnyWeb/GunnyWeb.csproj --no-restore
-
-      - name: Test the application
-        run: dotnet test ./GunnyWeb/GunnyWeb.csproj --no-build --verbosity normal
-
-      - name: Publish the application
-        run: dotnet publish ./GunnyWeb/GunnyWeb.csproj --configuration Release --output ./publish
-
-      - name: Upload published application as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: publish
-          path: ./publish
-
-      - name: Verify artifact upload
-        run: |
-          if (Test-Path ./publish) { dir .\publish } else { Write-Error "Publish folder not found"; exit 1 }
-
-  deploy:
-    needs: build
-    runs-on: self-hosted
-
-    steps:
-      # - name: Configure TrustedHosts for WinRM
-      #   run: |
-      #     Set-Item wsman:\localhost\client\trustedhosts -Value "*" -Force
       - name: Ping the target machine
         run: |
-          ping -n 4 192.168.1.199
+          ping -n 4 192.168.1.91
+
       - name: Test WinRM port 5985 (HTTP) connection
         run: |
-          $server = '192.168.1.199'
+          $server = '192.168.1.91'
           $username = 'Administrator'
           $password = 'Trinh2002'
 
@@ -73,59 +32,3 @@ jobs:
             Write-Error "Failed to connect to $server via WinRM"
             exit 1
           }
-
-      - name: Download published application
-        uses: actions/download-artifact@v4
-        with:
-          name: publish
-          path: ./publish
-
-      - name: Deploy to IIS on VM
-        env:
-          DEPLOY_SERVER: '192.168.0.186'
-          DEPLOY_USERNAME: 'Administrator'
-          DEPLOY_PASSWORD: 'Trinh2002'
-          DESTINATION_PATH: 'C:\inetpub\wwwroot\GunnyWeb'
-          # DEPLOY_SERVER: ${{ secrets.DEPLOY_SERVER }}
-          # DEPLOY_USERNAME: ${{ secrets.DEPLOY_USERNAME }}
-          # DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
-          # DESTINATION_PATH: 'C:\inetpub\wwwroot\GunnyWeb'
-        run: |
-          $server = $env:DEPLOY_SERVER
-          $username = $env:DEPLOY_USERNAME
-          $password = $env:DEPLOY_PASSWORD
-          $destinationPath = $env:DESTINATION_PATH
-
-          if (-not $server -or -not $username -or -not $password) {
-              Write-Error "Deployment secrets are not set. Configure DEPLOY_SERVER, DEPLOY_USERNAME, DEPLOY_PASSWORD in repository secrets."
-              exit 1
-          }
-
-          $publishFolder = Join-Path $PWD 'publish'
-          if (-not (Test-Path $publishFolder)) {
-              Write-Error "Publish folder not found: $publishFolder"
-              exit 1
-          }
-
-          $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
-          $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
-
-          Write-Host "Creating PSSession to $server..."
-          $session = New-PSSession -ComputerName $server -Credential $credential -ErrorAction Stop
-
-          try {
-              Write-Host "Copying files to ${server}:$destinationPath..."
-              Copy-Item -Path (Join-Path $publishFolder '*') -Destination $destinationPath -ToSession $session -Recurse -Force -ErrorAction Stop
-
-              Write-Host "Restarting IIS on remote host..."
-              Invoke-Command -Session $session -ScriptBlock { iisreset }
-
-              Write-Host "Deployment finished successfully."
-          }
-          finally {
-              if ($session) { Remove-PSSession $session }
-          }
-
-      - name: Notify success
-        if: success()
-        run: echo "Deployment to IIS was successful."
