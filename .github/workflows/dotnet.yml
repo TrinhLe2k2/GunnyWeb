@@ -10,16 +10,16 @@ on:
 
 jobs:
   test_connect:
-    runs-on: self-hosted  # Chạy trên self-hosted runner
+    runs-on: self-hosted
 
     steps:
       - name: Configure TrustedHosts for WinRM
         run: |
-          Set-Item wsman:\localhost\client\trustedhosts -Value "*" -Force  # Cho phép kết nối từ tất cả các máy
+          Set-Item wsman:\localhost\client\trustedhosts -Value "*" -Force
 
       - name: Ping the target machine
         run: |
-          ping -n 4 192.168.0.186  # Kiểm tra kết nối mạng tới máy đích
+          ping -n 4 192.168.0.186
 
       - name: Test WinRM port 5985 (HTTP) connection
         run: |
