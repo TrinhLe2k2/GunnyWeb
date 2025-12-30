@@ -11,10 +11,7 @@ jobs:
   test_connect:
     runs-on: self-hosted
     steps:
-      - name: Ping the target machine
-        run: |
-          ping -n 4 192.168.1.91
-
+      
       - name: Test WinRM port 5985 (HTTP) connection
         run: |
           $server = '192.168.1.91'
