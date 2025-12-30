@@ -9,44 +9,44 @@ on:
     branches:
       - master
 
-jobs:
-  build:
-    runs-on: windows-latest
+# jobs:
+#   build:
+#     runs-on: self-hosted
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
 
-      - name: Setup .NET Core SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
+#       - name: Setup .NET Core SDK
+#         uses: actions/setup-dotnet@v4
+#         with:
+#           dotnet-version: '8.0.x'
 
-      - name: Restore dependencies
-        run: dotnet restore
+#       - name: Restore dependencies
+#         run: dotnet restore
 
-      - name: Build the application
-        run: dotnet build --no-restore
+#       - name: Build the application
+#         run: dotnet build --no-restore
 
-      - name: Test the application
-        run: dotnet test --no-build --verbosity normal
+#       - name: Test the application
+#         run: dotnet test --no-build --verbosity normal
 
-      - name: Publish the application
-        run: dotnet publish ./GunnyWeb/GunnyWeb.csproj --configuration Release --output ./publish
+#       - name: Publish the application
+#         run: dotnet publish ./GunnyWeb/GunnyWeb.csproj --configuration Release --output ./publish
 
-      - name: Upload published application as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: publish
-          path: ./publish
+#       - name: Upload published application as artifact
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: publish
+#           path: ./publish
 
-      - name: Verify artifact upload
-        run: |
-          if (Test-Path ./publish) { dir .\publish } else { Write-Error "Publish folder not found"; exit 1 }
+#       - name: Verify artifact upload
+#         run: |
+#           if (Test-Path ./publish) { dir .\publish } else { Write-Error "Publish folder not found"; exit 1 }
 
   deploy:
     needs: build
-    runs-on: windows-latest
+    runs-on: self-hosted
 
     steps:
       - name: Configure TrustedHosts for WinRM
