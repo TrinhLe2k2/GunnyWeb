@@ -51,8 +51,27 @@ jobs:
     steps:
       - name: Configure TrustedHosts for WinRM
         run: |
-          Set-Item wsman:\localhost\client\trustedhosts -Value "*" -Force  # Cho phép kết nối từ tất cả các máy
+          Set-Item wsman:\localhost\client\trustedhosts -Value "*" -Force
+      - name: Ping the target machine
+        run: |
+          ping -n 4 192.168.0.186
+      - name: Test WinRM port 5985 (HTTP) connection
+        run: |
+          $server = '192.168.0.186'
+          $username = 'Administrator'
+          $password = 'Trinh2002'
 
+          $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
+          $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
+
+          try {
+            $session = New-PSSession -ComputerName $server -Credential $credential -ErrorAction Stop
+            Write-Host "Successfully connected to $server via WinRM"
+            Remove-PSSession $session
+          } catch {
+            Write-Error "Failed to connect to $server via WinRM"
+            exit 1
+          }
       - name: Test WinRM Connection
         env:
           DEPLOY_SERVER: '192.168.0.186'
