@@ -24,7 +24,7 @@ jobs:
       #     install-dir: 'C:\dotnet'
 
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore ./GunnyWeb/GunnyWeb.csproj
 
       - name: Build the application
         run: dotnet build --no-restore
