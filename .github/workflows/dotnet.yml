@@ -1,4 +1,4 @@
-name: Test WinRM Connection
+name: Test WinRM Connection v2
 
 on:
   push:
