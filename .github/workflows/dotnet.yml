@@ -74,10 +74,14 @@ jobs:
 
       - name: Deploy to IIS on VM
         env:
-          DEPLOY_SERVER: ${{ secrets.DEPLOY_SERVER }}
-          DEPLOY_USERNAME: ${{ secrets.DEPLOY_USERNAME }}
-          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+          DEPLOY_SERVER: '192.168.0.186'
+          DEPLOY_USERNAME: 'Administrator'
+          DEPLOY_PASSWORD: 'Trinh2002'
           DESTINATION_PATH: 'C:\inetpub\wwwroot\GunnyWeb'
+          # DEPLOY_SERVER: ${{ secrets.DEPLOY_SERVER }}
+          # DEPLOY_USERNAME: ${{ secrets.DEPLOY_USERNAME }}
+          # DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+          # DESTINATION_PATH: 'C:\inetpub\wwwroot\GunnyWeb'
         run: |
           $server = $env:DEPLOY_SERVER
           $username = $env:DEPLOY_USERNAME
