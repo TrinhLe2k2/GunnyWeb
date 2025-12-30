@@ -1,78 +1,119 @@
-name: Deploy GunnyWeb to IIS  # Tên của workflow (quy trình CI/CD), bạn có thể thay đổi tùy ý.
 
-# Trigger để GitHub Actions bắt đầu chạy khi có các sự kiện sau:
+name: Deploy GunnyWeb to IIS
+
 on:
   push:
     branches:
-      - master   # Khi có thay đổi push lên nhánh 'master' (ví dụ: bạn commit mã nguồn vào nhánh master)
+      - master
   pull_request:
     branches:
-      - master   # Khi có pull request vào nhánh 'master'
+      - master
 
-jobs:  # Định nghĩa các công việc (jobs) mà workflow sẽ thực hiện
+jobs:
   build:
-    runs-on: windows-latest  # Chạy job trên môi trường Windows của GitHub Actions
+    runs-on: windows-latest
 
     steps:
-      # Bước 1: Checkout mã nguồn từ GitHub repository
       - name: Checkout code
-        uses: actions/checkout@v4  # Sử dụng action của GitHub để lấy mã nguồn từ repository
+        uses: actions/checkout@v4
 
-      # Bước 2: Cài đặt .NET Core SDK, yêu cầu để biên dịch và chạy ứng dụng .NET
       - name: Setup .NET Core SDK
-        uses: actions/setup-dotnet@v4  # Sử dụng action của GitHub để cài đặt .NET SDK
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x  # Cài đặt phiên bản .NET Core 8.x (thay đổi nếu bạn dùng phiên bản khác)
+          dotnet-version: '8.0.x'
 
-      # Bước 3: Phục hồi các dependency (gói) của dự án .NET
       - name: Restore dependencies
-        run: dotnet restore  # Thực hiện lệnh 'dotnet restore' để tải các gói cần thiết từ NuGet
+        run: dotnet restore
 
-      # Bước 4: Biên dịch (build) ứng dụng .NET
       - name: Build the application
-        run: dotnet build --no-restore  # Thực hiện lệnh 'dotnet build' để biên dịch ứng dụng với cấu hình Release
+        run: dotnet build --no-restore
 
-      - name: Build the application Test
+      - name: Test the application
         run: dotnet test --no-build --verbosity normal
 
-      # Bước 5: Xuất bản (publish) ứng dụng .NET Core để sẵn sàng cho việc deploy
       - name: Publish the application
-        run: dotnet publish --configuration Release --output ./publish  # Thực hiện lệnh 'dotnet publish' và lưu đầu ra vào thư mục './publish'
+        run: dotnet publish ./GunnyWeb/GunnyWeb.csproj --configuration Release --output ./publish
 
-  # Bước 6: Deploy (triển khai) ứng dụng lên IIS trên VM
+      - name: Upload published application as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish
+          path: ./publish
+
+      - name: Verify artifact upload
+        run: |
+          if (Test-Path ./publish) { dir .\publish } else { Write-Error "Publish folder not found"; exit 1 }
+
   deploy:
-    runs-on: windows-latest  # Chạy job deploy trên môi trường Windows
+    needs: build
+    runs-on: windows-latest
 
     steps:
-      # Bước 1: Tải các file đã được publish từ job build trước đó
-      - name: Download published application
-        uses: actions/download-artifact@v4  # Tải artifact (tệp đã được xuất bản) từ job build
-        with:
-          name: publish  # Tên của artifact cần tải
-
-      # Bước 2: Triển khai ứng dụng lên IIS trên VM
-      - name: Deploy to IIS on VM
+      - name: Configure TrustedHosts for WinRM
         run: |
-          # Lấy các thông tin từ Secrets của GitHub để bảo mật (ví dụ: địa chỉ IP của VM, username, password)
-          $server = '192.168.1.53'    # Địa chỉ IP của VM
-          $username = 'Administrator'    # Tên người dùng đăng nhập vào VM
-          $password = 'Trinh2002'    # Mật khẩu đăng nhập vào VM
-          $destinationPath = 'C:\inetpub\wwwroot\GunnyWeb'  # Đường dẫn thư mục trên IIS để chứa ứng dụng
+          Set-Item wsman:\localhost\client\trustedhosts -Value "*" -Force  # Cho phép kết nối từ tất cả các máy
 
-          # Chuyển mật khẩu thành dạng an toàn (SecureString) cho PowerShell
+      - name: Test WinRM Connection
+        run: |
+          $server = $env:DEPLOY_SERVER
+          $username = $env:DEPLOY_USERNAME
+          $password = $env:DEPLOY_PASSWORD
+
           $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
           $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
 
-          # Sao chép file từ thư mục publish vào thư mục IIS trên VM
-          Invoke-Command -ComputerName $server -Credential $credential -ScriptBlock {
-              Copy-Item -Path './publish/*' -Destination $destinationPath -Recurse
+          $session = New-PSSession -ComputerName $server -Credential $credential -ErrorAction Stop
+          Write-Host "Successfully connected to $server via WinRM"
+          Remove-PSSession $session
+
+      - name: Download published application
+        uses: actions/download-artifact@v4
+        with:
+          name: publish
+          path: ./publish
+
+      - name: Deploy to IIS on VM
+        env:
+          DEPLOY_SERVER: ${{ secrets.DEPLOY_SERVER }}
+          DEPLOY_USERNAME: ${{ secrets.DEPLOY_USERNAME }}
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+          DESTINATION_PATH: 'C:\inetpub\wwwroot\GunnyWeb'
+        run: |
+          $server = $env:DEPLOY_SERVER
+          $username = $env:DEPLOY_USERNAME
+          $password = $env:DEPLOY_PASSWORD
+          $destinationPath = $env:DESTINATION_PATH
+
+          if (-not $server -or -not $username -or -not $password) {
+              Write-Error "Deployment secrets are not set. Configure DEPLOY_SERVER, DEPLOY_USERNAME, DEPLOY_PASSWORD in repository secrets."
+              exit 1
           }
 
-          # Khởi động lại IIS để áp dụng các thay đổi (reload website)
-          Invoke-Command -ComputerName $server -Credential $credential -ScriptBlock {
-              iisreset  # Lệnh để khởi động lại IIS (tái khởi động ứng dụng web)
+          $publishFolder = Join-Path $PWD 'publish'
+          if (-not (Test-Path $publishFolder)) {
+              Write-Error "Publish folder not found: $publishFolder"
+              exit 1
           }
 
-      # Bước 3: In thông báo thành công sau khi deploy xong
+          $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
+          $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
+
+          Write-Host "Creating PSSession to $server..."
+          $session = New-PSSession -ComputerName $server -Credential $credential -ErrorAction Stop
+
+          try {
+              Write-Host "Copying files to ${server}:$destinationPath..."
+              Copy-Item -Path (Join-Path $publishFolder '*') -Destination $destinationPath -ToSession $session -Recurse -Force -ErrorAction Stop
+
+              Write-Host "Restarting IIS on remote host..."
+              Invoke-Command -Session $session -ScriptBlock { iisreset }
+
+              Write-Host "Deployment finished successfully."
+          }
+          finally {
+              if ($session) { Remove-PSSession $session }
+          }
+
       - name: Notify success
-        run: echo "Deployment to IIS was successful."  # In thông báo khi deployment thành công
+        if: success()
+        run: echo "Deployment to IIS was successful."
