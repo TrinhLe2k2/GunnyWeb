@@ -7,15 +7,13 @@ on:
   pull_request:
     branches:
       - master
-
 jobs:
   test_connect:
     runs-on: self-hosted
-
     steps:
       - name: Configure TrustedHosts for WinRM
         run: |
-          Set-Item wsman:\localhost\client\trustedhosts -Value "*" -Force
+          Start-Process powershell -ArgumentList 'Set-Item wsman:\localhost\client\trustedhosts -Value "*" -Force' -Verb RunAs
 
       - name: Ping the target machine
         run: |
