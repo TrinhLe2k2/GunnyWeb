@@ -1,0 +1,44 @@
+﻿name: Test WinRM Connection
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+jobs:
+  test_connect:
+    runs-on: self-hosted
+    timeout-minutes: 2   # tránh treo runner
+
+    steps:
+      - name: Ping target
+        run: ping -n 4 192.168.0.186
+
+      - name: Check WinRM port
+        shell: powershell
+        run: |
+          Test-NetConnection -ComputerName 192.168.0.186 -Port 5985
+
+      - name: Test WinRM connection
+        shell: powershell
+        run: |
+          $server = '192.168.0.186'
+          $username = 'Administrator'
+          $password = 'Trinh2002'
+
+          $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
+          $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
+
+          $option = New-PSSessionOption -OpenTimeout 5000 -OperationTimeout 5000
+
+          try {
+            $session = New-PSSession -ComputerName $server -Credential $credential -SessionOption $option -ErrorAction Stop
+            Write-Host "✅ WinRM connected successfully"
+            Remove-PSSession $session
+          }
+          catch {
+            Write-Error "❌ WinRM connection failed"
+            exit 1
+          }
