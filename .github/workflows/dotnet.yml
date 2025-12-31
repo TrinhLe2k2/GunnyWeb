@@ -1,28 +1,70 @@
-name: Test Runner Local Execution
+name: Deploy GunnyWeb to IIS (Self-hosted)
 
 on:
   push:
     branches: [ master ]
-  pull_request:
-    branches: [ master ]
 
 jobs:
-  test_connect:
+  deploy:
     runs-on: self-hosted
-    timeout-minutes: 2
+    timeout-minutes: 10
 
     steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
       - name: Show runner info
         shell: powershell
         run: |
-          Write-Host "Runner hostname:"
+          Write-Host "Running on:"
           hostname
-          Write-Host "User:"
           whoami
-          Write-Host "IP:"
-          ipconfig
 
-      - name: Test local PowerShell execution
+      - name: Restore dependencies
+        shell: powershell
+        run: dotnet restore ./GunnyWeb/GunnyWeb.csproj
+
+      - name: Build application
+        shell: powershell
+        run: dotnet build ./GunnyWeb/GunnyWeb.csproj -c Release --no-restore
+
+      - name: Publish application
         shell: powershell
         run: |
-          Write-Host "✅ Running locally on self-hosted runner"
+          dotnet publish ./GunnyWeb/GunnyWeb.csproj `
+            -c Release `
+            -o C:\deploy\GunnyWeb
+
+      - name: Stop IIS
+        shell: powershell
+        run: |
+          Write-Host "Stopping IIS..."
+          iisreset /stop
+
+      - name: Deploy to IIS folder
+        shell: powershell
+        run: |
+          $source = "C:\deploy\GunnyWeb"
+          $destination = "C:\inetpub\wwwroot\GunnyWeb"
+
+          if (!(Test-Path $destination)) {
+            New-Item -ItemType Directory -Path $destination
+          }
+
+          Write-Host "Deploying files..."
+          Copy-Item "$source\*" $destination -Recurse -Force
+
+      - name: Start IIS
+        shell: powershell
+        run: |
+          Write-Host "Starting IIS..."
+          iisreset /start
+
+      - name: Health check
+        shell: powershell
+        run: |
+          Start-Sleep -Seconds 3
+          Invoke-WebRequest http://localhost -UseBasicParsing
+
+      - name: Deploy success
+        run: echo "✅ GunnyWeb deployed successfully to IIS"
