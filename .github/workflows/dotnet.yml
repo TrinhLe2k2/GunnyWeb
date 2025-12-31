@@ -14,17 +14,17 @@ jobs:
 
     steps:
       - name: Ping target
-        run: ping -n 4 192.168.1.91
+        run: ping -n 4 192.168.0.186
 
       - name: Check WinRM port
         shell: powershell
         run: |
-          Test-NetConnection -ComputerName 192.168.1.91 -Port 5985
+          Test-NetConnection -ComputerName 192.168.0.186 -Port 5985
 
       - name: Test WinRM connection
         shell: powershell
         run: |
-          $server = '192.168.1.91'
+          $server = '192.168.0.186'
           $username = 'Administrator'
           $password = 'Trinh2002'
 
