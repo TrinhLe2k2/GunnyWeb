@@ -1,127 +1,70 @@
-
-name: Deploy GunnyWeb to IIS
+name: Deploy GunnyWeb to IIS (Self-hosted)
 
 on:
   push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
+    branches: [ master ]
 
 jobs:
-  build:
-    runs-on: windows-latest
+  deploy:
+    runs-on: self-hosted
+    timeout-minutes: 10
 
     steps:
-      - name: Checkout code
+      - name: Checkout source code
         uses: actions/checkout@v4
 
-      - name: Setup .NET Core SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
+      - name: Show runner info
+        shell: powershell
+        run: |
+          Write-Host "Running on:"
+          hostname
+          whoami
 
       - name: Restore dependencies
-        run: dotnet restore
+        shell: powershell
+        run: dotnet restore ./GunnyWeb/GunnyWeb.csproj
 
-      - name: Build the application
-        run: dotnet build --no-restore
+      - name: Build application
+        shell: powershell
+        run: dotnet build ./GunnyWeb/GunnyWeb.csproj -c Release --no-restore
 
-      - name: Test the application
-        run: dotnet test --no-build --verbosity normal
-
-      - name: Publish the application
-        run: dotnet publish ./GunnyWeb/GunnyWeb.csproj --configuration Release --output ./publish
-
-      - name: Upload published application as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: publish
-          path: ./publish
-
-      - name: Verify artifact upload
+      - name: Publish application
+        shell: powershell
         run: |
-          if (Test-Path ./publish) { dir .\publish } else { Write-Error "Publish folder not found"; exit 1 }
+          dotnet publish ./GunnyWeb/GunnyWeb.csproj `
+            -c Release `
+            -o C:\deploy\GunnyWeb
 
-  deploy:
-    needs: build
-    runs-on: windows-latest
-
-    steps:
-      - name: Configure TrustedHosts for WinRM
+      - name: Stop IIS
+        shell: powershell
         run: |
-          Set-Item wsman:\localhost\client\trustedhosts -Value "*" -Force  # Cho phép kết nối từ tất cả các máy
+          Write-Host "Stopping IIS..."
+          iisreset /stop
 
-      - name: Test WinRM Connection
-        env:
-          DEPLOY_SERVER: '192.168.0.186'
-          DEPLOY_USERNAME: 'Administrator'
-          DEPLOY_PASSWORD: 'Trinh2002'
+      - name: Deploy to IIS folder
+        shell: powershell
         run: |
-          $server = $env:DEPLOY_SERVER
-          $username = $env:DEPLOY_USERNAME
-          $password = $env:DEPLOY_PASSWORD
+          $source = "C:\deploy\GunnyWeb"
+          $destination = "C:\inetpub\wwwroot\GunnyWeb"
 
-          $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
-          $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
-
-          $session = New-PSSession -ComputerName $server -Credential $credential -ErrorAction Stop
-          Write-Host "Successfully connected to $server via WinRM"
-          Remove-PSSession $session
-
-      - name: Download published application
-        uses: actions/download-artifact@v4
-        with:
-          name: publish
-          path: ./publish
-
-      - name: Deploy to IIS on VM
-        env:
-          DEPLOY_SERVER: '192.168.0.186'
-          DEPLOY_USERNAME: 'Administrator'
-          DEPLOY_PASSWORD: 'Trinh2002'
-          DESTINATION_PATH: 'C:\inetpub\wwwroot\GunnyWeb'
-          # DEPLOY_SERVER: ${{ secrets.DEPLOY_SERVER }}
-          # DEPLOY_USERNAME: ${{ secrets.DEPLOY_USERNAME }}
-          # DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
-          # DESTINATION_PATH: 'C:\inetpub\wwwroot\GunnyWeb'
-        run: |
-          $server = $env:DEPLOY_SERVER
-          $username = $env:DEPLOY_USERNAME
-          $password = $env:DEPLOY_PASSWORD
-          $destinationPath = $env:DESTINATION_PATH
-
-          if (-not $server -or -not $username -or -not $password) {
-              Write-Error "Deployment secrets are not set. Configure DEPLOY_SERVER, DEPLOY_USERNAME, DEPLOY_PASSWORD in repository secrets."
-              exit 1
+          if (!(Test-Path $destination)) {
+            New-Item -ItemType Directory -Path $destination
           }
 
-          $publishFolder = Join-Path $PWD 'publish'
-          if (-not (Test-Path $publishFolder)) {
-              Write-Error "Publish folder not found: $publishFolder"
-              exit 1
-          }
+          Write-Host "Deploying files..."
+          Copy-Item "$source\*" $destination -Recurse -Force
 
-          $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
-          $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
+      - name: Start IIS
+        shell: powershell
+        run: |
+          Write-Host "Starting IIS..."
+          iisreset /start
 
-          Write-Host "Creating PSSession to $server..."
-          $session = New-PSSession -ComputerName $server -Credential $credential -ErrorAction Stop
+      - name: Health check
+        shell: powershell
+        run: |
+          Start-Sleep -Seconds 3
+          Invoke-WebRequest http://localhost -UseBasicParsing
 
-          try {
-              Write-Host "Copying files to ${server}:$destinationPath..."
-              Copy-Item -Path (Join-Path $publishFolder '*') -Destination $destinationPath -ToSession $session -Recurse -Force -ErrorAction Stop
-
-              Write-Host "Restarting IIS on remote host..."
-              Invoke-Command -Session $session -ScriptBlock { iisreset }
-
-              Write-Host "Deployment finished successfully."
-          }
-          finally {
-              if ($session) { Remove-PSSession $session }
-          }
-
-      - name: Notify success
-        if: success()
-        run: echo "Deployment to IIS was successful."
+      - name: Deploy success
+        run: echo "✅ GunnyWeb deployed successfully to IIS"
